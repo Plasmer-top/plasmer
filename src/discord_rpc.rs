@@ -77,6 +77,11 @@ impl DiscordRpc {
     Self { tx: Some(tx) }
   }
 
+  #[cfg(test)]
+  pub(crate) fn disabled() -> Self {
+    Self { tx: None }
+  }
+
   pub(crate) fn update(&mut self) {}
 
   pub(crate) fn set_idling(&mut self) {
