@@ -38,7 +38,7 @@ fn default_burst_cps() -> u32 {
   20
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) struct SavedSettings {
   #[serde(default = "default_trigger")]
   pub(crate) trigger: String,
@@ -89,9 +89,12 @@ impl Default for SavedSettings {
 }
 
 pub(crate) fn config_dir() -> std::path::PathBuf {
-  let dir = dirs::config_dir()
-    .unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join("plasmer-ac");
+  let base = if cfg!(test) {
+    std::env::temp_dir()
+  } else {
+    dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+  };
+  let dir = base.join("plasmer-ac");
 
   std::fs::create_dir_all(&dir).ok();
   dir

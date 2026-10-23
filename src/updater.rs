@@ -45,6 +45,22 @@ struct UpdateApiResponse {
   download_url: Option<String>,
 }
 
+fn is_newer(latest: &str, current: &str) -> bool {
+  match (latest.parse::<u32>(), current.parse::<u32>()) {
+    (Ok(latest), Ok(current)) => latest > current,
+    _ => latest != current,
+  }
+}
+
+#[cfg(test)]
+pub(crate) fn fixed_update_state(update: Option<AvailableUpdate>) -> Arc<UpdateState> {
+  let state = Arc::new(UpdateState::new());
+  if let Some(update) = update {
+    state.set_available(update);
+  }
+  state
+}
+
 pub(crate) fn start_update_check(current_version: &str) -> Arc<UpdateState> {
   let state = Arc::new(UpdateState::new());
   let state_for_thread = Arc::clone(&state);
@@ -79,8 +95,7 @@ pub(crate) fn start_update_check(current_version: &str) -> Arc<UpdateState> {
         return;
       }
 
-      let has_newer_version = latest_version != current_version;
-      if !has_newer_version {
+      if !is_newer(&latest_version, &current_version) {
         return;
       }
 
@@ -101,4 +116,17 @@ pub(crate) fn start_update_check(current_version: &str) -> Arc<UpdateState> {
     .ok();
 
   state
+}
+
+#[cfg(test)]
+mod tests {
+  use super::is_newer;
+
+  #[test]
+  fn only_a_higher_version_is_an_update() {
+    assert!(is_newer("23", "22"));
+    assert!(!is_newer("22", "22"));
+    assert!(!is_newer("22", "23"));
+    assert!(is_newer("10", "9"));
+  }
 }

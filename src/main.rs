@@ -15,7 +15,7 @@ use gui::{App, load_icon};
 use threads::SharedState;
 use win32::{CpuLayout, TimerGuard, elevate_process, init_low_fns};
 
-pub(crate) const APP_VERSION: u32 = 22;
+pub(crate) const APP_VERSION: u32 = 23;
 
 fn main() -> eframe::Result<()> {
   init_low_fns();
@@ -29,8 +29,8 @@ fn main() -> eframe::Result<()> {
 
   let options = eframe::NativeOptions {
     viewport: egui::ViewportBuilder::default()
-      .with_inner_size([470.0, 640.0])
-      .with_min_inner_size([470.0, 640.0])
+      .with_inner_size([470.0, 648.0])
+      .with_min_inner_size([470.0, 648.0])
       .with_icon(load_icon()),
     ..Default::default()
   };
@@ -38,6 +38,6 @@ fn main() -> eframe::Result<()> {
   eframe::run_native(
     "Plasmer",
     options,
-    Box::new(move |_cc| Ok(Box::new(App::new(state, APP_VERSION)))),
+    Box::new(move |cc| Ok(Box::new(App::new(cc, state, APP_VERSION)))),
   )
 }
