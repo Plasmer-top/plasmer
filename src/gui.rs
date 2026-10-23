@@ -78,7 +78,7 @@ fn card_frame() -> egui::Frame {
   egui::Frame::new()
     .fill(BG_CARD)
     .corner_radius(egui::CornerRadius::same(10))
-    .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
+    .stroke(egui::Stroke::new(1.0_f32, BORDER_SUBTLE))
     .inner_margin(egui::Margin::same(16))
 }
 
@@ -102,15 +102,17 @@ fn accent_button(ui: &mut egui::Ui, text: &str, size: f32) -> bool {
     .corner_radius(egui::CornerRadius::same(8))
     .min_size(egui::vec2(ui.available_width().min(260.0), 42.0));
 
-  let resp = ui.add(btn);
+  ui.add(btn).clicked()
+}
 
-  if resp.hovered() {
-    ui.ctx().output_mut(|o| {
-      o.cursor_icon = egui::CursorIcon::PointingHand;
-    });
+fn option_button<T: PartialEq>(ui: &mut egui::Ui, current: &mut T, value: T, text: &str) {
+  let btn = egui::Button::new(text)
+    .selected(*current == value)
+    .frame_when_inactive(true);
+
+  if ui.add(btn).clicked() {
+    *current = value;
   }
-
-  resp.clicked()
 }
 
 fn danger_button(ui: &mut egui::Ui, text: &str) -> bool {
@@ -123,15 +125,7 @@ fn danger_button(ui: &mut egui::Ui, text: &str) -> bool {
   .corner_radius(egui::CornerRadius::same(8))
   .min_size(egui::vec2(ui.available_width().min(200.0), 36.0));
 
-  let resp = ui.add(btn);
-
-  if resp.hovered() {
-    ui.ctx().output_mut(|o| {
-      o.cursor_icon = egui::CursorIcon::PointingHand;
-    });
-  }
-
-  resp.clicked()
+  ui.add(btn).clicked()
 }
 
 pub(crate) fn load_icon() -> egui::IconData {
@@ -227,10 +221,11 @@ impl App {
 }
 
 impl eframe::App for App {
-  fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+  fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    let ctx = &ui.ctx().clone();
     self.rpc.update();
 
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
     style.override_text_style = Some(egui::TextStyle::Body);
     style
       .text_styles
@@ -248,30 +243,30 @@ impl eframe::App for App {
     style.visuals.window_fill = BG_DARK;
 
     style.visuals.widgets.noninteractive.bg_fill = BG_CARD;
-    style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, TEXT_SECONDARY);
+    style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, TEXT_SECONDARY);
 
     style.visuals.widgets.inactive.bg_fill = BG_INPUT;
-    style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, BORDER_SUBTLE);
-    style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT_PRIMARY);
+    style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, BORDER_SUBTLE);
+    style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, TEXT_PRIMARY);
     style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(6);
 
     style.visuals.widgets.hovered.bg_fill = BG_CARD_HOVER;
-    style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT);
-    style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, TEXT_PRIMARY);
+    style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, ACCENT);
+    style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, TEXT_PRIMARY);
     style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(6);
 
     style.visuals.widgets.active.bg_fill = ACCENT_ACTIVE;
     style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(6);
 
     style.visuals.selection.bg_fill = SELECTION_BG;
-    style.visuals.selection.stroke = egui::Stroke::new(1.0, ACCENT);
+    style.visuals.selection.stroke = egui::Stroke::new(1.0_f32, ACCENT);
 
     style.spacing.item_spacing = egui::vec2(8.0, 6.0);
     style.spacing.button_padding = egui::vec2(12.0, 6.0);
     style.spacing.tooltip_width = 280.0;
     style.interaction.tooltip_delay = 0.0;
 
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 
     egui::CentralPanel::default()
       .frame(
@@ -279,7 +274,7 @@ impl eframe::App for App {
           .fill(BG_DARK)
           .inner_margin(egui::Margin::same(20)),
       )
-      .show(ctx, |ui| {
+      .show_inside(ui, |ui| {
         ui.add_space(2.0);
         ui.columns(2, |columns| {
           columns[0].vertical(|ui| {
@@ -349,7 +344,7 @@ impl App {
     egui::Frame::new()
       .fill(UPDATE_BG)
       .corner_radius(egui::CornerRadius::same(8))
-      .stroke(egui::Stroke::new(1.0, UPDATE_BORDER))
+      .stroke(egui::Stroke::new(1.0_f32, UPDATE_BORDER))
       .inner_margin(egui::Margin::same(10))
       .show(ui, |ui| {
         ui.vertical_centered(|ui| {
@@ -411,8 +406,8 @@ impl App {
       );
       ui.add_space(2.0);
       ui.horizontal(|ui| {
-        ui.selectable_value(&mut self.action_key_mode, ActionKeyMode::Hold, "Hold");
-        ui.selectable_value(&mut self.action_key_mode, ActionKeyMode::Toggle, "Toggle");
+        option_button(ui, &mut self.action_key_mode, ActionKeyMode::Hold, "Hold");
+        option_button(ui, &mut self.action_key_mode, ActionKeyMode::Toggle, "Toggle");
       });
 
       ui.add_space(8.0);
@@ -424,16 +419,8 @@ impl App {
       );
       ui.add_space(2.0);
       ui.horizontal(|ui| {
-        ui.selectable_value(
-          &mut self.action_press_mode,
-          ActionPressMode::DownUp,
-          "Down + Up",
-        );
-        ui.selectable_value(
-          &mut self.action_press_mode,
-          ActionPressMode::DownOnly,
-          "Down only",
-        );
+        option_button(ui, &mut self.action_press_mode, ActionPressMode::DownUp, "Down + Up");
+        option_button(ui, &mut self.action_press_mode, ActionPressMode::DownOnly, "Down only");
       });
 
       ui.add_space(10.0);
@@ -494,8 +481,8 @@ impl App {
       });
       ui.add_space(2.0);
       ui.horizontal(|ui| {
-        ui.selectable_value(&mut self.burst_enabled, false, "Off");
-        ui.selectable_value(&mut self.burst_enabled, true, "On");
+        option_button(ui, &mut self.burst_enabled, false, "Off");
+        option_button(ui, &mut self.burst_enabled, true, "On");
       });
 
       if self.burst_enabled {
@@ -730,11 +717,6 @@ impl App {
         .min_size(egui::vec2(70.0, 28.0));
 
         let bind_resp = ui.add(bind_btn);
-        if bind_resp.hovered() {
-          ui.ctx().output_mut(|o| {
-            o.cursor_icon = egui::CursorIcon::PointingHand;
-          });
-        }
         if bind_resp.contains_pointer() || bind_resp.is_pointer_button_down_on() {
           self.capture_button_hovered = true;
         }
@@ -759,7 +741,7 @@ impl App {
           rect,
           6.0,
           BG_INPUT,
-          egui::Stroke::new(1.0, BORDER_SUBTLE),
+          egui::Stroke::new(1.0_f32, BORDER_SUBTLE),
           egui::StrokeKind::Inside,
         );
         if !is_capturing {
