@@ -15,7 +15,7 @@ use gui::{App, load_icon};
 use threads::SharedState;
 use win32::{CpuLayout, TimerGuard, elevate_process, init_low_fns};
 
-pub(crate) const APP_VERSION: u32 = 23;
+pub(crate) const APP_VERSION: u32 = 24;
 
 fn main() -> eframe::Result<()> {
   init_low_fns();
