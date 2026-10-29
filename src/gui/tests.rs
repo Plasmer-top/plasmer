@@ -283,3 +283,25 @@ fn keyboard_cannot_press_stop() {
     press(key);
   }
 }
+
+#[test]
+fn graph_shows_the_last_session() {
+  let mut app = launch(SavedSettings::default());
+  assert!(app.query_by_label("Last session graph").is_none());
+
+  *app.state().state.last_session.lock().unwrap() = (10.0, vec![9.9, 10.1, 10.0, 12.5]);
+  settle(&mut app);
+  click(&mut app, Role::Button, "Last session graph");
+
+  assert_eq!(stat(&app, "Clicks"), "5");
+  assert_eq!(stat(&app, "Target"), "10.000 ms");
+  assert_eq!(stat(&app, "Max"), "12.500 ms");
+}
+
+#[test]
+fn interval_buckets_take_min_mean_max() {
+  assert_eq!(
+    interval_buckets(&[1.0, 3.0, 2.0, 2.0, 5.0], 2),
+    vec![(1.0, 2.0, 3.0), (2.0, 2.0, 2.0), (5.0, 5.0, 5.0)]
+  );
+}

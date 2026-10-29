@@ -416,6 +416,18 @@ fn stat_tiles(ui: &mut Ui, tiles: [(&str, String, &str); 5]) {
   }
 }
 
+fn interval_buckets(intervals: &[f64], size: usize) -> Vec<(f64, f64, f64)> {
+  intervals
+    .chunks(size.max(1))
+    .map(|c| {
+      let (lo, hi) = c
+        .iter()
+        .fold((f64::MAX, f64::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+      (lo, c.iter().sum::<f64>() / c.len() as f64, hi)
+    })
+    .collect()
+}
+
 pub(crate) fn load_icon() -> egui::IconData {
   let bytes = include_bytes!("../assets/icon.png");
   let image = image::load_from_memory(bytes)
@@ -479,6 +491,8 @@ pub(crate) struct App {
   update_state: Arc<UpdateState>,
   app_version: u32,
   logo: egui::TextureHandle,
+  icon: Arc<egui::IconData>,
+  graph_open: bool,
   qpc_freq: f64,
   settings: SavedSettings,
   saved: SavedSettings,
@@ -518,7 +532,7 @@ impl App {
     settings.burst_clicks = settings.burst_clicks.clamp(1, 1000);
     settings.burst_cps = settings.burst_cps.clamp(1, 1000);
 
-    let icon = load_icon();
+    let icon = Arc::new(load_icon());
     let logo = ctx.load_texture(
       "logo",
       egui::ColorImage::from_rgba_unmultiplied(
@@ -537,6 +551,8 @@ impl App {
       state,
       app_version,
       logo,
+      icon,
+      graph_open: false,
       qpc_freq: qpc_freq() as f64,
       settings,
       saved,
@@ -605,6 +621,9 @@ impl eframe::App for App {
       ctx.request_repaint();
     }
 
+    if self.graph_open {
+      self.show_graph(&ctx);
+    }
     self.poll_capture(&ctx);
     self.autosave(&ctx);
 
@@ -740,7 +759,7 @@ impl App {
     }
   }
 
-  fn show_footer(&self, ui: &mut Ui, keys: &Result<Keys, Problem>) -> bool {
+  fn show_footer(&mut self, ui: &mut Ui, keys: &Result<Keys, Problem>) -> bool {
     let enabled = self.active || (keys.is_ok() && self.capturing.is_none());
     let (look, label) = match (self.active, enabled) {
       (true, _) => ((SURFACE_2, BORDER_STRONG, TEXT), "Stop"),
@@ -758,6 +777,12 @@ impl App {
     if self.active {
       ui.add_space(10.0);
       stat_tiles(ui, self.session_stats());
+    } else if self.state.last_session.lock().unwrap().1.len() > 1 {
+      ui.add_space(10.0);
+      let look = (SURFACE_2, BORDER, TEXT_MUTED);
+      if wide_button(ui, 36.0, look, "Last session graph", true).clicked() {
+        self.graph_open = true;
+      }
     }
 
     response.clicked()
@@ -854,6 +879,143 @@ impl App {
         "How even the click intervals were (100% = perfectly even).\nShown when the session ends.",
       ),
     ]
+  }
+
+  fn show_graph(&mut self, ctx: &egui::Context) {
+    let builder = egui::ViewportBuilder::default()
+      .with_title("Plasmer · Last session")
+      .with_icon(self.icon.clone())
+      .with_inner_size([720.0, 400.0])
+      .with_min_inner_size([440.0, 280.0]);
+    ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("graph"), builder, |ui, _| {
+      if ui.input(|i| i.viewport().close_requested()) {
+        self.graph_open = false;
+      }
+      egui::CentralPanel::default()
+        .frame(
+          egui::Frame::new()
+            .fill(BG)
+            .inner_margin(egui::Margin::same(16)),
+        )
+        .show_inside(ui, |ui| self.interval_graph(ui));
+    });
+  }
+
+  fn interval_graph(&self, ui: &mut Ui) {
+    let session = self.state.last_session.lock().unwrap();
+    let (target, intervals) = (session.0, &session.1[..]);
+    if intervals.is_empty() {
+      return;
+    }
+    let ms = |v: f64| format!("{v:.3} ms");
+    let mean = intervals.iter().sum::<f64>() / intervals.len() as f64;
+    let (min, max) = intervals
+      .iter()
+      .fold((f64::MAX, f64::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+
+    stat_tiles(
+      ui,
+      [
+        (
+          "Clicks",
+          (intervals.len() + 1).to_string(),
+          "Clicks in the session",
+        ),
+        ("Target", ms(target), "Interval set by the CPS"),
+        ("Mean", ms(mean), "Average interval between clicks"),
+        ("Min", ms(min), "Shortest interval"),
+        ("Max", ms(max), "Longest interval (worst spike)"),
+      ],
+    );
+    ui.add_space(12.0);
+
+    let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+    let plot = egui::Rect::from_min_max(rect.min + vec2(64.0, 8.0), rect.max - vec2(8.0, 22.0));
+    // ponytail: rebuckets every frame, O(n) per repaint; cache per width if hour-long 1000 CPS sessions lag.
+    let size = intervals.len().div_ceil(plot.width().max(1.0) as usize);
+    let buckets = interval_buckets(intervals, size);
+
+    let (lo, hi) = (min.min(target), max.max(target));
+    let pad = ((hi - lo) * 0.08).max(target * 0.01).max(0.001);
+    let (lo, hi) = (lo - pad, hi + pad);
+    let y = |v: f64| plot.bottom() - ((v - lo) / (hi - lo)) as f32 * plot.height();
+    let col = plot.width() / buckets.len() as f32;
+    let x = |i: usize| plot.left() + (i as f32 + 0.5) * col;
+
+    let painter = ui.painter_at(rect);
+    let small = FontId::proportional(12.0);
+    for k in 0..=4 {
+      let v = lo + (hi - lo) * k as f64 / 4.0;
+      painter.hline(plot.x_range(), y(v), Stroke::new(1.0_f32, BORDER));
+      let at = pos2(plot.left() - 8.0, y(v));
+      painter.text(
+        at,
+        Align2::RIGHT_CENTER,
+        format!("{v:.3}"),
+        small.clone(),
+        TEXT_DIM,
+      );
+    }
+    painter.text(
+      rect.left_top(),
+      Align2::LEFT_TOP,
+      "ms",
+      small.clone(),
+      TEXT_DIM,
+    );
+    let bottom = plot.bottom() + 6.0;
+    painter.text(
+      pos2(plot.left(), bottom),
+      Align2::LEFT_TOP,
+      "#1",
+      small.clone(),
+      TEXT_DIM,
+    );
+    let last = format!("#{}", intervals.len() + 1);
+    painter.text(
+      pos2(plot.right(), bottom),
+      Align2::RIGHT_TOP,
+      last,
+      small.clone(),
+      TEXT_DIM,
+    );
+    let axis = pos2(plot.center().x, bottom);
+    painter.text(axis, Align2::CENTER_TOP, "click", small.clone(), TEXT_DIM);
+
+    let band = ACCENT.gamma_multiply(0.35);
+    for (i, &(lo, _, hi)) in buckets.iter().enumerate() {
+      let xs = x(i) - col.max(1.0) / 2.0..=x(i) + col.max(1.0) / 2.0;
+      painter.rect_filled(egui::Rect::from_x_y_ranges(xs, y(hi)..=y(lo)), 0.0, band);
+    }
+    let means = buckets.iter().enumerate().map(|(i, b)| pos2(x(i), y(b.1)));
+    painter.line(means.collect(), Stroke::new(1.5_f32, ACCENT_HOVER));
+    let line = [pos2(plot.left(), y(target)), pos2(plot.right(), y(target))];
+    painter.extend(egui::Shape::dashed_line(
+      &line,
+      Stroke::new(1.0_f32, GREEN),
+      6.0,
+      4.0,
+    ));
+
+    let hovered = response
+      .hover_pos()
+      .filter(|p| plot.x_range().contains(p.x));
+    if let Some(p) = hovered {
+      let i = (((p.x - plot.left()) / col) as usize).min(buckets.len() - 1);
+      let (lo, mean, hi) = buckets[i];
+      painter.vline(x(i), plot.y_range(), Stroke::new(1.0_f32, BORDER_STRONG));
+      let first = i * size + 1;
+      let last = ((i + 1) * size).min(intervals.len()) + 1;
+      response.on_hover_text_at_pointer(format!(
+        "Clicks {first}–{last}
+min {}
+mean {}
+max {}",
+        ms(lo),
+        ms(mean),
+        ms(hi)
+      ));
+    }
   }
 
   fn show_keys(&mut self, ui: &mut Ui, flagged: &[CaptureTarget]) {

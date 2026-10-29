@@ -38,6 +38,7 @@ pub(crate) struct SharedState {
   pub(crate) session_first_fire_qpc: AtomicI64,
   pub(crate) session_last_fire_qpc: AtomicI64,
   pub(crate) session_interval_qpc: AtomicI64,
+  pub(crate) last_session: Mutex<(f64, Vec<f64>)>,
 }
 
 impl SharedState {
@@ -65,6 +66,7 @@ impl SharedState {
       session_first_fire_qpc: AtomicI64::new(0),
       session_last_fire_qpc: AtomicI64::new(0),
       session_interval_qpc: AtomicI64::new(0),
+      last_session: Mutex::new((0.0, Vec::new())),
     }
   }
 
@@ -152,7 +154,7 @@ fn trigger_virtual_key(trigger: TriggerKind) -> i32 {
   }
 }
 
-fn finalize_session_stats(state: &SharedState, freq: i64, local_intervals: &[f64]) {
+fn finalize_session_stats(state: &SharedState, freq: i64, local_intervals: Vec<f64>) {
   let (jitter, consistency) = if !local_intervals.is_empty() {
     let n = local_intervals.len();
     let mean = local_intervals.iter().sum::<f64>() / n as f64;
@@ -206,6 +208,9 @@ fn finalize_session_stats(state: &SharedState, freq: i64, local_intervals: &[f64
       .actual_cps
       .store(actual_cps.to_bits(), Ordering::Relaxed);
   }
+
+  *state.last_session.lock().unwrap() =
+    (interval_qpc as f64 * 1000.0 / freq as f64, local_intervals);
 }
 
 pub(crate) fn spawn_spam_thread(
@@ -276,7 +281,7 @@ pub(crate) fn spawn_spam_thread(
 
         while thread_state.running.load(Ordering::Relaxed) {
           if thread_state.spam_shutdown.load(Ordering::Acquire) {
-            return;
+            break;
           }
           if click_limit != 0 && fired >= click_limit {
             break;
@@ -348,7 +353,7 @@ pub(crate) fn spawn_spam_thread(
           send_batch(&mut release);
         }
 
-        finalize_session_stats(&thread_state, ctx.freq, &local_intervals);
+        finalize_session_stats(&thread_state, ctx.freq, local_intervals);
 
         if click_limit != 0 {
           thread_state.running.store(false, Ordering::Release);
