@@ -3,7 +3,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const RPC_ENABLED: bool = true;
+use crate::config::{DISCORD_CLIENT_ID, DISCORD_RPC_ENABLED, WEBSITE_URL};
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(10);
 const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -23,12 +23,10 @@ enum RpcCommand {
   Shutdown,
 }
 
-const CLIENT_ID: &str = "1492218027205460199";
-const DISCORD_INVITE_URL: &str = "https://plasmer.top/api/discord";
 
 impl DiscordRpc {
   pub(crate) fn new(app_version: u32, _cps: u32) -> Self {
-    if !RPC_ENABLED {
+    if !DISCORD_RPC_ENABLED {
       return Self { tx: None };
     }
 
@@ -45,7 +43,7 @@ impl DiscordRpc {
           if client.is_none() && last_connect_attempt.elapsed() >= RECONNECT_INTERVAL {
             last_connect_attempt = Instant::now();
 
-            let mut next = DiscordIpcClient::new(CLIENT_ID);
+            let mut next = DiscordIpcClient::new(DISCORD_CLIENT_ID);
             if next.connect().is_ok() {
               let _ = set_activity(&mut next, app_version, rpc_state);
               client = Some(next);
@@ -123,7 +121,7 @@ fn set_activity(
     })
     .buttons(vec![activity::Button::new(
       "Get Plasmer",
-      DISCORD_INVITE_URL,
+      WEBSITE_URL,
     )])
     .assets(
       activity::Assets::new()

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod config;
 mod discord_rpc;
 mod gui;
 mod input;
@@ -11,11 +12,10 @@ mod win32;
 use eframe::egui;
 use std::sync::Arc;
 
+use config::{APP_NAME, APP_VERSION};
 use gui::{App, load_icon};
 use threads::SharedState;
 use win32::{CpuLayout, TimerGuard, elevate_process, init_low_fns};
-
-pub(crate) const APP_VERSION: u32 = 24;
 
 fn main() -> eframe::Result<()> {
   init_low_fns();
@@ -36,7 +36,7 @@ fn main() -> eframe::Result<()> {
   };
 
   eframe::run_native(
-    "Plasmer",
+    APP_NAME,
     options,
     Box::new(move |cc| Ok(Box::new(App::new(cc, state, APP_VERSION)))),
   )

@@ -2,6 +2,8 @@ use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use crate::config::{UPDATE_CHECK_URL, WEBSITE_URL};
+
 #[derive(Clone, Debug)]
 pub(crate) struct AvailableUpdate {
   pub(crate) latest_version: String,
@@ -34,9 +36,6 @@ impl UpdateState {
     self.inner.lock().ok().and_then(|g| g.available.clone())
   }
 }
-
-const UPDATE_CHECK_URL: &str = "https://plasmer.top/api/update/latest";
-const SITE_URL: &str = "https://plasmer.top";
 
 #[derive(Deserialize)]
 struct UpdateApiResponse {
@@ -105,8 +104,8 @@ pub(crate) fn start_update_check(current_version: &str) -> Arc<UpdateState> {
 
       let download_url = api
         .download_url
-        .filter(|url| url.starts_with(SITE_URL))
-        .unwrap_or_else(|| SITE_URL.to_string());
+        .filter(|url| url.starts_with(WEBSITE_URL))
+        .unwrap_or_else(|| WEBSITE_URL.to_string());
 
       state_for_thread.set_available(AvailableUpdate {
         latest_version,

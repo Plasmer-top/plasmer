@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::config::WEBSITE_URL;
 use crate::discord_rpc::DiscordRpc;
 use crate::input::{
   action_name, action_to_trigger, any_capture_key_down, capture_pressed_token, parse_action,
@@ -36,8 +37,6 @@ const RED: Color32 = Color32::from_rgb(240, 98, 98);
 
 const CAPTION: f32 = 13.0;
 const SEMIBOLD: &str = "semibold";
-
-const WEBSITE_URL: &str = "https://plasmer.top";
 
 const CAPTURE_HINT: &str = "Press any key or mouse button · click the box to cancel";
 const BURST_HELP: &str = "One-shot burst hotkey.\n\n\

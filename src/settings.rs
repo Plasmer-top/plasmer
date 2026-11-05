@@ -94,7 +94,7 @@ pub(crate) fn config_dir() -> std::path::PathBuf {
   } else {
     dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
   };
-  let dir = base.join("plasmer-ac");
+  let dir = base.join(crate::config::SETTINGS_DIR_NAME);
 
   std::fs::create_dir_all(&dir).ok();
   dir
